@@ -1,7 +1,7 @@
 Equipe de Desenvolvimento: 
 
 Bruno Henrique Brasil da Silva - 04185495
-Daniel Viana de Varias - 04178809
+Daniel Viana de Farias - 04178809
 
 # Aplicativo de Busca de GIFs
 
