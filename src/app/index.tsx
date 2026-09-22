@@ -1,98 +1,84 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useState } from 'react';
+import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SearchBar } from '@/components/ui/search-bar';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+const GIPHY_KEY = process.env.EXPO_PUBLIC_GIPHY_API_KEY;
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
-  return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
+type Gif = {
+  id: string;
+  images: {
+    fixed_height: { url: string; width: string; height: string };
+  };
+};
+
+const getStorageKey = (query: string) => `@app:gifs:${query.toLowerCase()}`;
 
 export default function HomeScreen() {
+  const [query, setQuery] = useState('');
+  const [gifs, setGifs] = useState<Gif[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const searchGifs = async (term: string) => {
+    if (!term.trim()) return;
+
+    setLoading(true);
+    const storageKey = getStorageKey(term);
+
+    try {
+      const cached = await AsyncStorage.getItem(storageKey);
+
+      if (cached) {
+        setGifs(JSON.parse(cached));
+        setLoading(false);
+        return;
+      }
+
+      const res = await axios.get('https://api.giphy.com/v1/gifs/search', {
+        params: { api_key: GIPHY_KEY, q: term, limit: 6 },
+      });
+
+      const data: Gif[] = res.data.data;
+      setGifs(data);
+      await AsyncStorage.setItem(storageKey, JSON.stringify(data));
+    } catch (err) {
+      console.log(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
+    <View style={{ flex: 1 }}>
+      <SearchBar value={query} onChangeText={setQuery} onSearch={searchGifs} />
 
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
-
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
-
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
+      <ScrollView contentContainerStyle={styles.container}>
+        {loading ? (
+          <Text>Carregando...</Text>
+        ) : gifs.length === 0 ? (
+          <Text>Pesquise algo para ver os GIFs</Text>
+        ) : (
+          gifs.map((gif) => (
+            <Image
+              key={gif.id}
+              source={{ uri: gif.images.fixed_height.url }}
+              style={{
+                width: Number(gif.images.fixed_height.width),
+                height: Number(gif.images.fixed_height.height),
+              }}
+            />
+          ))
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
     alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
-  },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
-  },
-  title: {
-    textAlign: 'center',
-  },
-  code: {
-    textTransform: 'uppercase',
-  },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+    gap: 12,
+    paddingVertical: 24,
   },
 });
